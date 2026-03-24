@@ -1,0 +1,35 @@
+name: CI/CD Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Login to DockerHub
+      run: |
+        echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
+
+    - name: Build Docker Image
+      run: docker build -t ${{ secrets.DOCKER_USER }}/docker-ec2-todo-app-auto-deploy .
+
+    - name: Push to DockerHub
+      run: docker push ${{ secrets.DOCKER_USER }}/docker-ec2-todo-app-auto-deploy
+
+    - name: Deploy on EC2
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+          docker pull ${{ secrets.DOCKER_USER }}/docker-ec2-todo-app-auto-deploy
+          docker stop docker-ec2-todo-app-auto-deploy || true
+          docker rm docker-ec2-todo-app-auto-deploy || true
+          docker run -d -p 4000:4000 --name docker-ec2-todo-app-auto-deploy ${{ secrets.DOCKER_USER }}/docker-ec2-todo-app-auto-deploy
